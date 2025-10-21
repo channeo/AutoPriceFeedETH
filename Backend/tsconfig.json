@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",                    // Hỗ trợ ES2020 (phù hợp Node.js 18+)
+    "module": "commonjs",                  // Module system cho Node.js
+    "strict": true,                        // Bật strict type checking
+    "esModuleInterop": true,               // Hỗ trợ import non-ES modules (như axios)
+    "skipLibCheck": true,                  // Bỏ qua check type của thư viện
+    "forceConsistentCasingInFileNames": true, // Đảm bảo tên file nhất quán
+    "outDir": "./dist",                    // Output folder khi compile
+    "rootDir": "./src"                     // Source folder
+  },
+  "include": ["src/**/*"],                 // Chỉ compile file trong src/
+  "exclude": ["node_modules"]              // Bỏ qua node_modules
+}

@@ -1,0 +1,48 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-5346a0beb1bc4bf8026adde2728a3db4aed5f87b",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/AutoPriceFeed.sol": "project/contracts/AutoPriceFeed.sol",
+    "contracts/Backup.sol": "project/contracts/Backup.sol",
+    "contracts/IAutoPriceFeed.sol": "project/contracts/IAutoPriceFeed.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": [
+        "project/:@chainlink/contracts/=npm/@chainlink/contracts@1.5.0/"
+      ]
+    },
+    "sources": {
+      "npm/@chainlink/contracts@1.5.0/src/v0.8/shared/interfaces/AggregatorV3Interface.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\n// solhint-disable-next-line interface-starts-with-i\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  function getRoundData(\n    uint80 _roundId\n  ) external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);\n\n  function latestRoundData()\n    external\n    view\n    returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);\n}\n"
+      },
+      "project/contracts/AutoPriceFeed.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\ncontract AutoPriceFeed {\r\n    int256 public ethPrice;        // Giá ETH/USD (8 số thập phân, ví dụ 200000000000 cho $2000)\r\n    uint256 public lastUpdate;     // Thời gian update cuối\r\n    address public owner;          // Chủ sở hữu\r\n    \r\n    // Events để theo dõi\r\n    event PriceUpdated(int256 newPrice, uint256 timestamp);\r\n    \r\n    // Chỉ owner mới update được\r\n    modifier onlyOwner() {\r\n        require(msg.sender == owner, \"Chi owner moi duoc update\");\r\n        _;\r\n    }\r\n    \r\n    constructor() {\r\n        owner = msg.sender;\r\n        ethPrice = 200000000000;  // Khởi tạo giá ban đầu $2000 * 1e8 để tránh error chia 0\r\n        lastUpdate = block.timestamp;\r\n    }\r\n    \r\n    // Backend gọi hàm này để update giá\r\n    function updateETHPrice(int256 _newPrice) external onlyOwner {\r\n        require(_newPrice > 0, \"Gia khong hop le\");\r\n        \r\n        ethPrice = _newPrice;\r\n        lastUpdate = block.timestamp;\r\n        \r\n        emit PriceUpdated(_newPrice, block.timestamp);\r\n    }\r\n    \r\n    // Các app khác đọc giá từ đây\r\n    function getETHPrice() external view returns (int256) {\r\n        require(block.timestamp - lastUpdate < 1 hours, \"Du lieu cu\");\r\n        return ethPrice;\r\n    }\r\n    \r\n    // Để khớp interface\r\n    function ethPrices() external view returns (int256) {\r\n        return ethPrice;\r\n    }\r\n    \r\n    // Kiểm tra dữ liệu có cũ không\r\n    function isDataFresh() external view returns (bool) {\r\n        return block.timestamp - lastUpdate < 1 hours;\r\n    }\r\n    \r\n    // Đổi owner (nếu cần)\r\n    function changeOwner(address _newOwner) external onlyOwner {\r\n        owner = _newOwner;\r\n    }\r\n}"
+      },
+      "project/contracts/Backup.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\nimport \"@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol\";  \r\n\r\ninterface IAutoPriceFeed {\r\n    function updateETHPrice(int256 _newPrice) external;\r\n    function ethPrice() external view returns (int256);\r\n}\r\n\r\ncontract BackupFeed {\r\n    IAutoPriceFeed public mainFeed;\r\n    address public owner;\r\n    AggregatorV3Interface internal priceFeedChainlink;\r\n    \r\n    // Chainlink ETH/USD address (Sepolia testnet)\r\n    address constant CHAINLINK_ETHUSD = 0x694AA1769357215DE4FAC081bf1f309aDC325306;\r\n    \r\n    event BackupUpdate(int256 price);\r\n    \r\n    modifier onlyOwner() {\r\n        require(msg.sender == owner, \"Chi owner\");\r\n        _;\r\n    }\r\n    \r\n    constructor(address _mainFeed) {\r\n        mainFeed = IAutoPriceFeed(_mainFeed);\r\n        priceFeedChainlink = AggregatorV3Interface(CHAINLINK_ETHUSD);\r\n        owner = msg.sender;\r\n    }\r\n    \r\n    // Lấy giá từ Chainlink và update main contract\r\n    function updateFromChainlink() external onlyOwner {\r\n        (\r\n            /* uint80 roundID */,\r\n            int256 chainlinkPrice,\r\n            /*uint startedAt*/,\r\n            uint256 timeStamp,\r\n            /*uint80 answeredInRound*/\r\n        ) = priceFeedChainlink.latestRoundData();\r\n        require(timeStamp > 0, \"Du lieu Chainlink cu\");\r\n        require(chainlinkPrice > 0, \"Gia Chainlink sai\");\r\n        \r\n        mainFeed.updateETHPrice(chainlinkPrice);  // Chainlink dùng 8 decimals, khớp với contract\r\n        emit BackupUpdate(chainlinkPrice);\r\n    }\r\n    \r\n    // Emergency update khi main backend down\r\n    function emergencyUpdate(int256 _price) external onlyOwner {\r\n        require(_price > 0, \"Gia sai\");\r\n        mainFeed.updateETHPrice(_price);\r\n    }\r\n}"
+      },
+      "project/contracts/IAutoPriceFeed.sol": {
+        "content": "pragma solidity ^0.8.20;\r\n\r\ninterface IAutoPriceFeed {\r\n    function updateETHPrice(int256 _newPrice) external;\r\n    function getETHPrice() external view returns (int256);\r\n    function ethPrice() external view returns (int256);\r\n    function lastUpdate() external view returns (uint256);\r\n    function isDataFresh() external view returns (bool);\r\n}\r\n\r\ncontract MultiUpdater {\r\n    IAutoPriceFeed public priceFeed;\r\n    address public owner;\r\n    mapping(address => bool) public authorizedBackends;\r\n    uint256 public backendCount;\r\n    \r\n    event BackendAdded(address backend);\r\n    event BackendRemoved(address backend);\r\n    \r\n    modifier onlyOwner() {\r\n        require(msg.sender == owner, \"Chi owner\");\r\n        _;\r\n    }\r\n    \r\n    modifier onlyAuthorized() {\r\n        require(authorizedBackends[msg.sender], \"Khong co quyen\");\r\n        _;\r\n    }\r\n    \r\n    constructor(address _priceFeed) {\r\n        priceFeed = IAutoPriceFeed(_priceFeed);\r\n        owner = msg.sender;\r\n        // Backend đầu tiên\r\n        authorizedBackends[msg.sender] = true;\r\n        backendCount = 1;\r\n    }\r\n    \r\n    // Backend gọi hàm này để update\r\n    function updatePrice(int256 _newPrice) external onlyAuthorized {\r\n        require(_newPrice > 0, \"Gia sai\");\r\n        \r\n        int256 currentPrice = priceFeed.ethPrice();\r\n        if (currentPrice <= 0) {\r\n            // Update đầu tiên, không check %\r\n            priceFeed.updateETHPrice(_newPrice);\r\n            return;\r\n        }\r\n        require(\r\n            (_newPrice > currentPrice && _newPrice - currentPrice > currentPrice / 200) || // >0.5% up\r\n            (_newPrice < currentPrice && currentPrice - _newPrice > currentPrice / 200),   // >0.5% down\r\n            \"Gia khong thay doi du\"\r\n        );\r\n        \r\n        priceFeed.updateETHPrice(_newPrice);\r\n    }\r\n    \r\n    function addBackend(address _backend) external onlyOwner {\r\n        require(!authorizedBackends[_backend], \"Da ton tai\");\r\n        authorizedBackends[_backend] = true;\r\n        backendCount++;\r\n        emit BackendAdded(_backend);\r\n    }\r\n    \r\n    // Owner xóa backend\r\n    function removeBackend(address _backend) external onlyOwner {\r\n        require(authorizedBackends[_backend], \"Khong ton tai\");\r\n        authorizedBackends[_backend] = false;\r\n        backendCount--;\r\n        emit BackendRemoved(_backend);\r\n    }\r\n}"
+      }
+    }
+  }
+}
