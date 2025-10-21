@@ -34,8 +34,6 @@ async function updatePrice() {
     const priceFeedAddr = await multiUpdater.priceFeed();
     const priceFeed = new ethers.Contract(priceFeedAddr, PRICE_FEED_ABI, provider);
     const currentPrice = await priceFeed.ethPrice();
-
-    // Retry logic cho Binance API
     let response:any;
     for (let i = 0; i < 3; i++) {
       try {
@@ -44,7 +42,7 @@ async function updatePrice() {
       } catch (err) {
         if (i === 2) throw err;
         console.log(`Retrying API call (${i + 1}/3)...`);
-        await setTimeout(1000); // Wait 1s trước khi retry
+        await setTimeout(1000); 
       }
     }
     const ethUsd = parseFloat(response.data.price);
@@ -62,10 +60,8 @@ async function updatePrice() {
     console.error('Update error:', error);
   }
 }
-
-// Update định kỳ mỗi 5 phút
 setInterval(updatePrice, 10000);
-updatePrice();  // Chạy ngay
+updatePrice();  
 
 // API endpoint: GET /price
 app.get('/price', async (req: Request, res: Response) => {
